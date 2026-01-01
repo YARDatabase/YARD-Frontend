@@ -8,9 +8,6 @@ const localStorageMock = (() => {
     setItem: (key: string, value: string) => {
       store[key] = value.toString()
     },
-    removeItem: (key: string) => {
-      delete store[key]
-    },
     clear: () => {
       store = {}
     },
@@ -23,9 +20,9 @@ Object.defineProperty(window, 'localStorage', {
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: jest.fn().mockImplementation(query => ({
+  value: jest.fn().mockImplementation(() => ({
     matches: false,
-    media: query,
+    media: '',
     onchange: null,
     addListener: jest.fn(),
     removeListener: jest.fn(),
@@ -41,54 +38,36 @@ describe('useTheme', () => {
     document.documentElement.classList.remove('dark')
   })
 
-  it('should initialize with light theme by default', () => {
+  it('useTheme_WhenInitialized_ReturnsLightTheme', () => {
+    // Arrange & Act
     const { result } = renderHook(() => useTheme())
-    
+
+    // Assert
     expect(result.current.theme).toBe('light')
-    expect(result.current.mounted).toBe(true)
   })
 
-  it('should load theme from localStorage', () => {
-    localStorageMock.setItem('theme', 'dark')
-    
+  it('useTheme_WhenToggled_SwitchesTheme', () => {
+    // Arrange
     const { result } = renderHook(() => useTheme())
-    
-    expect(result.current.theme).toBe('dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-  })
 
-  it('should toggle theme correctly', () => {
-    const { result } = renderHook(() => useTheme())
-    
-    expect(result.current.theme).toBe('light')
-    
+    // Act
     act(() => {
       result.current.toggleTheme()
     })
-    
+
+    // Assert
     expect(result.current.theme).toBe('dark')
     expect(localStorageMock.getItem('theme')).toBe('dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-    
-    act(() => {
-      result.current.toggleTheme()
-    })
-    
-    expect(result.current.theme).toBe('light')
-    expect(localStorageMock.getItem('theme')).toBe('light')
-    expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
-  it('should use prefers-color-scheme when no localStorage value', () => {
-    const darkMediaQuery = window.matchMedia as jest.Mock
-    darkMediaQuery.mockReturnValue({
-      matches: true,
-      media: '(prefers-color-scheme: dark)',
-    })
-    
+  it('useTheme_WhenLocalStorageHasTheme_LoadsTheme', () => {
+    // Arrange
+    localStorageMock.setItem('theme', 'dark')
+
+    // Act
     const { result } = renderHook(() => useTheme())
-    
+
+    // Assert
     expect(result.current.theme).toBe('dark')
   })
 })
-

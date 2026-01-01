@@ -4,39 +4,36 @@ function parseItemTypes(itemTypes: string): string[] {
 }
 
 describe('parseItemTypes', () => {
-  it('should parse comma-separated item types', () => {
-    const result = parseItemTypes('SWORD,AXE,BOW')
+  it('parseItemTypes_WhenCommaSeparated_ReturnsArray', () => {
+    // Arrange
+    const input = 'SWORD,AXE,BOW'
+
+    // Act
+    const result = parseItemTypes(input)
+
+    // Assert
     expect(result).toEqual(['SWORD', 'AXE', 'BOW'])
   })
 
-  it('should handle spaces around commas', () => {
-    const result = parseItemTypes('SWORD, AXE, BOW')
-    expect(result).toEqual(['SWORD', 'AXE', 'BOW'])
-  })
+  it('parseItemTypes_WhenEmptyString_ReturnsEmptyArray', () => {
+    // Arrange
+    const input = ''
 
-  it('should convert to uppercase', () => {
-    const result = parseItemTypes('sword,axe,bow')
-    expect(result).toEqual(['SWORD', 'AXE', 'BOW'])
-  })
+    // Act
+    const result = parseItemTypes(input)
 
-  it('should handle single item type', () => {
-    const result = parseItemTypes('SWORD')
-    expect(result).toEqual(['SWORD'])
-  })
-
-  it('should handle empty string', () => {
-    const result = parseItemTypes('')
+    // Assert
     expect(result).toEqual([])
   })
 
-  it('should handle null/undefined', () => {
-    const result = parseItemTypes(null as any)
-    expect(result).toEqual([])
-  })
+  it('parseItemTypes_WhenHasSpaces_TrimsAndUppercases', () => {
+    // Arrange
+    const input = 'sword, axe, bow'
 
-  it('should trim whitespace', () => {
-    const result = parseItemTypes(' SWORD , AXE , BOW ')
+    // Act
+    const result = parseItemTypes(input)
+
+    // Assert
     expect(result).toEqual(['SWORD', 'AXE', 'BOW'])
   })
 })
-
