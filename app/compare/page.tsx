@@ -27,36 +27,29 @@ interface ReforgeStats {
   ability_damage?: number
 }
 
-interface ReforgeEffect {
-  reforge_name?: string
-  item_types?: string
-  required_rarities?: string[]
-  reforge_stats?: Record<string, ReforgeStats>
+// api response reforge from the new /api/reforges endpoint
+interface APIReforge {
+  reforge_name: string
+  item_types: string
+  required_rarities: string[]
+  reforge_stats: Record<string, ReforgeStats>
   reforge_ability?: string | Record<string, string>
   reforge_costs?: Record<string, number>
-  description?: string[]
-  obtaining?: string
-  mining_level_req?: string
+  source: string
+  stone_id?: string
+  stone_name?: string
+  stone_tier?: string
+  stone_price?: number
 }
 
-interface ReforgeStone {
-  id: string
-  name: string
-  tier: string
-  npc_sell_price?: number | string
-  auction_price?: number
-  bazaar_buy_price?: number
-  bazaar_sell_price?: number
-  reforge_effect?: ReforgeEffect
-}
-
-interface ReforgeStonesResponse {
+interface ReforgesResponse {
   success: boolean
   count: number
   lastUpdated: string
-  reforgeStones: ReforgeStone[]
+  reforges: APIReforge[]
 }
 
+// processed reforge for display
 interface Reforge {
   name: string
   itemTypes: string[]
@@ -64,7 +57,11 @@ interface Reforge {
   stats: Record<string, ReforgeStats>
   costs: Record<string, number>
   ability?: string | Record<string, string>
-  stones: ReforgeStone[]
+  source: string
+  stoneId?: string
+  stoneName?: string
+  stoneTier?: string
+  stonePrice?: number
 }
 
 const RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'DIVINE', 'SPECIAL']
@@ -85,7 +82,6 @@ function ComparePageContent() {
   const { theme, toggleTheme } = useTheme()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [reforgeStones, setReforgeStones] = useState<ReforgeStone[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedReforges, setSelectedReforges] = useState<string[]>([])
@@ -94,7 +90,7 @@ function ComparePageContent() {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchReforgeStones()
+    fetchReforges()
   }, [])
 
   useEffect(() => {
@@ -105,58 +101,38 @@ function ComparePageContent() {
     }
   }, [searchParams])
 
-  const fetchReforgeStones = async () => {
+  // fetches all reforges from the api and transforms them for display
+  const fetchReforges = async () => {
     try {
       setLoading(true)
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-      const response = await fetch(`${apiUrl}/api/reforge-stones`)
-      if (!response.ok) throw new Error('Failed to fetch reforge stones')
-      const data: ReforgeStonesResponse = await response.json()
-      setReforgeStones(data.reforgeStones || [])
+      const response = await fetch(`${apiUrl}/api/reforges`)
+      if (!response.ok) throw new Error('Failed to fetch reforges')
+      const data: ReforgesResponse = await response.json()
+      
+      // transform api response to display format
+      const transformedReforges: Reforge[] = (data.reforges || []).map(apiReforge => ({
+        name: apiReforge.reforge_name,
+        itemTypes: parseItemTypes(apiReforge.item_types || ''),
+        rarities: apiReforge.required_rarities || [],
+        stats: apiReforge.reforge_stats || {},
+        costs: apiReforge.reforge_costs || {},
+        ability: apiReforge.reforge_ability,
+        source: apiReforge.source,
+        stoneId: apiReforge.stone_id,
+        stoneName: apiReforge.stone_name,
+        stoneTier: apiReforge.stone_tier,
+        stonePrice: apiReforge.stone_price
+      }))
+      
+      setAvailableReforges(transformedReforges.sort((a, b) => a.name.localeCompare(b.name)))
       setLastUpdated(data.lastUpdated || null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reforge stones')
+      setError(err instanceof Error ? err.message : 'Failed to load reforges')
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const reforgeMap = new Map<string, Reforge>()
-
-    reforgeStones.forEach(stone => {
-      if (!stone.reforge_effect?.reforge_name) return
-
-      const name = stone.reforge_effect.reforge_name
-      const itemTypes = parseItemTypes(stone.reforge_effect.item_types || '')
-      const rarities = stone.reforge_effect.required_rarities || []
-      const stats = stone.reforge_effect.reforge_stats || {}
-      const costs = stone.reforge_effect.reforge_costs || {}
-
-      if (!reforgeMap.has(name)) {
-        reforgeMap.set(name, {
-          name,
-          itemTypes: [...new Set(itemTypes)],
-          rarities: [...new Set(rarities)],
-          stats,
-          costs,
-          ability: stone.reforge_effect.reforge_ability,
-          stones: []
-        })
-      }
-
-      const reforge = reforgeMap.get(name)!
-      stone.reforge_effect.item_types?.split(',').forEach(t => {
-        const type = t.trim().toUpperCase()
-        if (!reforge.itemTypes.includes(type)) {
-          reforge.itemTypes.push(type)
-        }
-      })
-      reforge.stones.push(stone)
-    })
-
-    setAvailableReforges(Array.from(reforgeMap.values()).sort((a, b) => a.name.localeCompare(b.name)))
-  }, [reforgeStones])
 
   const comparedReforges = useMemo(() => {
     return selectedReforges
@@ -241,7 +217,7 @@ function ComparePageContent() {
           <div className="text-center">
             <p className="text-red-600 dark:text-red-400">{error}</p>
             <button
-              onClick={fetchReforgeStones}
+              onClick={fetchReforges}
               className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
             >
               Retry

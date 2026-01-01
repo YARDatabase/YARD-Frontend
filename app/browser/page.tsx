@@ -38,36 +38,29 @@ interface ReforgeStats {
   [key: string]: number | undefined
 }
 
-interface ReforgeEffect {
-  reforge_name?: string
-  item_types?: string
-  required_rarities?: string[]
-  reforge_stats?: Record<string, ReforgeStats>
+
+interface APIReforge {
+  reforge_name: string
+  item_types: string
+  required_rarities: string[]
+  reforge_stats: Record<string, ReforgeStats>
   reforge_ability?: string | Record<string, string>
   reforge_costs?: Record<string, number>
-  description?: string[]
-  obtaining?: string
-  mining_level_req?: string
+  source: string
+  stone_id?: string
+  stone_name?: string
+  stone_tier?: string
+  stone_price?: number
 }
 
-interface ReforgeStone {
-  id: string
-  name: string
-  tier: string
-  npc_sell_price?: number | string
-  auction_price?: number
-  bazaar_buy_price?: number
-  bazaar_sell_price?: number
-  reforge_effect?: ReforgeEffect
-}
-
-interface ReforgeStonesResponse {
+interface ReforgesResponse {
   success: boolean
   count: number
   lastUpdated: string
-  reforgeStones: ReforgeStone[]
+  reforges: APIReforge[]
 }
 
+// processed reforge for display
 interface Reforge {
   name: string
   itemTypes: string[]
@@ -75,12 +68,17 @@ interface Reforge {
   stats: Record<string, ReforgeStats>
   costs: Record<string, number>
   ability?: string | Record<string, string>
-  stones: ReforgeStone[]
+  source: string
+  stoneId?: string
+  stoneName?: string
+  stoneTier?: string
+  stonePrice?: number
 }
 
 const ITEM_TYPES = ['SWORD', 'BOW', 'ARMOR', 'TOOL', 'ACCESSORY', 'FISHING_ROD', 'EQUIPMENT']
 const STAT_TYPES = ['strength', 'crit_damage', 'crit_chance', 'attack_speed', 'health', 'defense', 'intelligence', 'speed', 'mining_speed', 'mining_fortune', 'farming_fortune', 'magic_find', 'pet_luck', 'ferocity', 'ability_damage']
 const RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'DIVINE', 'SPECIAL']
+const SOURCES = ['Blacksmith', 'Reforge Stone']
 
 // removes minecraft color codes from text strings
 function stripMinecraftColors(text: string): string {
@@ -93,17 +91,74 @@ function parseItemTypes(itemTypes: string): string[] {
   return itemTypes.split(',').map(t => t.trim().toUpperCase())
 }
 
+// standard blacksmith reforge prices based on rarity
+const BLACKSMITH_PRICES: Record<string, number> = {
+  'COMMON': 250,
+  'UNCOMMON': 500,
+  'RARE': 1000,
+  'EPIC': 2500,
+  'LEGENDARY': 5000,
+  'MYTHIC': 10000,
+  'DIVINE': 15000,
+  'SPECIAL': 25000,
+  'VERY SPECIAL': 50000
+}
+
+// converts item ID to readable name
+function formatItemName(itemId: string): string {
+  return itemId
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+// groups and formats item types, handling SPECIFIC items that were split
+function processItemTypes(itemTypes: string[]): Array<{ type: string; isSpecific: boolean }> {
+  const result: Array<{ type: string; isSpecific: boolean }> = []
+  let i = 0
+  
+  const regularTypes = ['SWORD', 'BOW', 'ARMOR', 'TOOL', 'ACCESSORY', 'FISHING_ROD', 'EQUIPMENT', 'AXE/HOE', 'ROD', 'VACUUM', 'CLOAK', 'BELT']
+  
+  while (i < itemTypes.length) {
+    if (itemTypes[i].startsWith('SPECIFIC:')) {
+      // extract the first item from SPECIFIC: prefix
+      const firstItem = itemTypes[i].replace('SPECIFIC:', '')
+      const specificItems = [firstItem]
+      
+      // collect any following items that are part of the specific list
+      i++
+      while (i < itemTypes.length && 
+             !itemTypes[i].startsWith('SPECIFIC:') && 
+             !regularTypes.includes(itemTypes[i])) {
+        specificItems.push(itemTypes[i])
+        i++
+      }
+      
+      // format the specific items
+      const formatted = specificItems.map(formatItemName).join(', ')
+      result.push({ type: formatted, isSpecific: true })
+    } else {
+      // regular item type
+      result.push({ type: itemTypes[i], isSpecific: false })
+      i++
+    }
+  }
+  
+  return result
+}
+
 function BrowserPageContent() {
   const { theme, toggleTheme } = useTheme()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [reforgeStones, setReforgeStones] = useState<ReforgeStone[]>([])
+  const [reforges, setReforges] = useState<Reforge[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedItemTypes, setSelectedItemTypes] = useState<string[]>([])
   const [selectedStatTypes, setSelectedStatTypes] = useState<string[]>([])
   const [selectedRarities, setSelectedRarities] = useState<string[]>([])
+  const [selectedSources, setSelectedSources] = useState<string[]>([])
   const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>('AND')
   const [sortBy, setSortBy] = useState<'name' | 'cost' | 'stat'>('name')
   const [sortStat, setSortStat] = useState<string>('strength')
@@ -144,61 +199,41 @@ function BrowserPageContent() {
   }, [searchParams])
 
   useEffect(() => {
-    fetchReforgeStones()
+    fetchReforges()
   }, [])
 
-  const fetchReforgeStones = async () => {
+  // fetches all reforges from the api and transforms them for display
+  const fetchReforges = async () => {
     try {
       setLoading(true)
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-      const response = await fetch(`${apiUrl}/api/reforge-stones`)
-      if (!response.ok) throw new Error('Failed to fetch reforge stones')
-      const data: ReforgeStonesResponse = await response.json()
-      setReforgeStones(data.reforgeStones || [])
+      const response = await fetch(`${apiUrl}/api/reforges`)
+      if (!response.ok) throw new Error('Failed to fetch reforges')
+      const data: ReforgesResponse = await response.json()
+      
+      // transform api response to display format
+      const transformedReforges: Reforge[] = (data.reforges || []).map(apiReforge => ({
+        name: apiReforge.reforge_name,
+        itemTypes: parseItemTypes(apiReforge.item_types || ''),
+        rarities: apiReforge.required_rarities || [],
+        stats: apiReforge.reforge_stats || {},
+        costs: apiReforge.reforge_costs || {},
+        ability: apiReforge.reforge_ability,
+        source: apiReforge.source,
+        stoneId: apiReforge.stone_id,
+        stoneName: apiReforge.stone_name,
+        stoneTier: apiReforge.stone_tier,
+        stonePrice: apiReforge.stone_price
+      }))
+      
+      setReforges(transformedReforges)
       setLastUpdated(data.lastUpdated || null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reforge stones')
+      setError(err instanceof Error ? err.message : 'Failed to load reforges')
     } finally {
       setLoading(false)
     }
   }
-
-  const reforges = useMemo(() => {
-    const reforgeMap = new Map<string, Reforge>()
-
-    reforgeStones.forEach(stone => {
-      if (!stone.reforge_effect?.reforge_name) return
-
-      const name = stone.reforge_effect.reforge_name
-      const itemTypes = parseItemTypes(stone.reforge_effect.item_types || '')
-      const rarities = stone.reforge_effect.required_rarities || []
-      const stats = stone.reforge_effect.reforge_stats || {}
-      const costs = stone.reforge_effect.reforge_costs || {}
-
-      if (!reforgeMap.has(name)) {
-        reforgeMap.set(name, {
-          name,
-          itemTypes: [...new Set(itemTypes)],
-          rarities: [...new Set(rarities)],
-          stats,
-          costs,
-          ability: stone.reforge_effect.reforge_ability,
-          stones: []
-        })
-      }
-
-      const reforge = reforgeMap.get(name)!
-      stone.reforge_effect.item_types?.split(',').forEach(t => {
-        const type = t.trim().toUpperCase()
-        if (!reforge.itemTypes.includes(type)) {
-          reforge.itemTypes.push(type)
-        }
-      })
-      reforge.stones.push(stone)
-    })
-
-    return Array.from(reforgeMap.values())
-  }, [reforgeStones])
 
   const searchSuggestions = useMemo(() => {
     return reforges.map(r => r.name)
@@ -217,6 +252,11 @@ function BrowserPageContent() {
             : Object.values(reforge.ability).some(a => stripMinecraftColors(a).toLowerCase().includes(query)))
         return matchesName || matchesAbility
       })
+    }
+
+    // filter by source (blacksmith vs reforge stone)
+    if (selectedSources.length > 0) {
+      filtered = filtered.filter(reforge => selectedSources.includes(reforge.source))
     }
 
     if (selectedItemTypes.length > 0 || selectedStatTypes.length > 0 || selectedRarities.length > 0) {
@@ -267,7 +307,7 @@ function BrowserPageContent() {
     })
 
     return filtered
-  }, [reforges, searchQuery, selectedItemTypes, selectedStatTypes, selectedRarities, filterLogic, sortBy, sortStat])
+  }, [reforges, searchQuery, selectedItemTypes, selectedStatTypes, selectedRarities, selectedSources, filterLogic, sortBy, sortStat])
 
   const paginatedReforges = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
@@ -338,6 +378,16 @@ function BrowserPageContent() {
     })
   }, [])
 
+  const toggleSource = useCallback((source: string) => {
+    setSelectedSources(prev => {
+      if (prev.includes(source)) {
+        return prev.filter(s => s !== source)
+      } else {
+        return [...prev, source]
+      }
+    })
+  }, [])
+
   const getTierColor = (tier: string) => {
     const colors: Record<string, string> = {
       COMMON: 'text-gray-600 dark:text-gray-400',
@@ -387,7 +437,7 @@ function BrowserPageContent() {
           <div className="text-center">
             <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button
-              onClick={fetchReforgeStones}
+              onClick={fetchReforges}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
               Retry
@@ -501,13 +551,15 @@ function BrowserPageContent() {
                   <h2 className="text-lg font-semibold text-gray-200 dark:text-white/87 mb-1">
                     {filteredReforges.length} Reforge{filteredReforges.length !== 1 ? 's' : ''} Found
                   </h2>
-                  {(selectedItemTypes.length > 0 || selectedStatTypes.length > 0 || selectedRarities.length > 0) && (
+                  {(selectedItemTypes.length > 0 || selectedStatTypes.length > 0 || selectedRarities.length > 0 || selectedSources.length > 0) && (
                     <p className="text-xs text-gray-600 dark:text-white/60">
                       {selectedItemTypes.length > 0 && `${selectedItemTypes.length} item type${selectedItemTypes.length !== 1 ? 's' : ''}`}
-                      {selectedItemTypes.length > 0 && (selectedStatTypes.length > 0 || selectedRarities.length > 0) && ' • '}
+                      {selectedItemTypes.length > 0 && (selectedStatTypes.length > 0 || selectedRarities.length > 0 || selectedSources.length > 0) && ' • '}
                       {selectedStatTypes.length > 0 && `${selectedStatTypes.length} stat${selectedStatTypes.length !== 1 ? 's' : ''}`}
-                      {selectedStatTypes.length > 0 && selectedRarities.length > 0 && ' • '}
+                      {selectedStatTypes.length > 0 && (selectedRarities.length > 0 || selectedSources.length > 0) && ' • '}
                       {selectedRarities.length > 0 && `${selectedRarities.length} rarit${selectedRarities.length !== 1 ? 'ies' : 'y'}`}
+                      {selectedRarities.length > 0 && selectedSources.length > 0 && ' • '}
+                      {selectedSources.length > 0 && `${selectedSources.length} source${selectedSources.length !== 1 ? 's' : ''}`}
                     </p>
                   )}
                 </div>
@@ -535,12 +587,13 @@ function BrowserPageContent() {
                       Table
                     </button>
                   </div>
-                  {(selectedItemTypes.length > 0 || selectedStatTypes.length > 0 || selectedRarities.length > 0 || searchQuery) && (
+                  {(selectedItemTypes.length > 0 || selectedStatTypes.length > 0 || selectedRarities.length > 0 || selectedSources.length > 0 || searchQuery) && (
                     <button
                       onClick={() => {
                         setSelectedItemTypes([])
                         setSelectedStatTypes([])
                         setSelectedRarities([])
+                        setSelectedSources([])
                         setSearchQuery('')
                       }}
                       className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-white/60 hover:bg-gray-100 dark:hover:bg-[#2C2C2C] rounded transition-colors"
@@ -555,51 +608,60 @@ function BrowserPageContent() {
             <div className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-white/10 rounded-lg p-4 mb-4">
               <h3 className="text-sm font-semibold text-gray-200 dark:text-white/87 mb-4">Filters</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <label className="block text-xs font-medium text-gray-700 dark:text-white/60">
-                    Filter Logic
-                  </label>
-                  <div className="group relative">
-                    <button
-                      type="button"
-                      className="w-4 h-4 rounded-full bg-gray-200 dark:bg-white/20 text-gray-600 dark:text-white/60 hover:bg-gray-300 dark:hover:bg-white/30 flex items-center justify-center text-xs font-semibold transition-colors"
-                      aria-label="Filter logic help"
-                    >
-                      ?
-                    </button>
-                    <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-gray-900 dark:bg-[#2C2C2C] border border-gray-700 dark:border-white/10 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
-                      <div className="text-xs text-white space-y-2">
-                        <p className="font-semibold mb-1">Filter Logic:</p>
-                        <p><strong>AND:</strong> Items must match ALL selected filters (e.g., Sword AND Strength AND Epic)</p>
-                        <p><strong>OR:</strong> Items must match ANY selected filter (e.g., Sword OR Bow OR Tool)</p>
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-white/60">
+                      Filter Logic
+                    </label>
+                    <div className="group relative">
+                      <button
+                        type="button"
+                        className="w-4 h-4 rounded-full bg-gray-200 dark:bg-white/20 text-gray-600 dark:text-white/60 hover:bg-gray-300 dark:hover:bg-white/30 flex items-center justify-center text-xs font-semibold transition-colors"
+                        aria-label="Filter logic help"
+                      >
+                        ?
+                      </button>
+                      <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-gray-900 dark:bg-[#2C2C2C] border border-gray-700 dark:border-white/10 rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+                        <div className="text-xs text-white space-y-2">
+                          <p className="font-semibold mb-1">Filter Logic:</p>
+                          <p><strong>AND:</strong> Items must match ALL selected filters (e.g., Sword AND Strength AND Epic)</p>
+                          <p><strong>OR:</strong> Items must match ANY selected filter (e.g., Sword OR Bow OR Tool)</p>
+                        </div>
+                        <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-900 dark:bg-[#2C2C2C] border-l border-t border-gray-700 dark:border-white/10 rotate-45"></div>
                       </div>
-                      <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-900 dark:bg-[#2C2C2C] border-l border-t border-gray-700 dark:border-white/10 rotate-45"></div>
                     </div>
                   </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setFilterLogic('AND')}
+                      className={`flex-1 px-3 py-2 text-xs rounded transition-colors ${
+                        filterLogic === 'AND'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white/60 hover:bg-gray-200 dark:hover:bg-white/20'
+                      }`}
+                    >
+                      AND
+                    </button>
+                    <button
+                      onClick={() => setFilterLogic('OR')}
+                      className={`flex-1 px-3 py-2 text-xs rounded transition-colors ${
+                        filterLogic === 'OR'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white/60 hover:bg-gray-200 dark:hover:bg-white/20'
+                      }`}
+                    >
+                      OR
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setFilterLogic('AND')}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-colors ${
-                      filterLogic === 'AND'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white/60 hover:bg-gray-200 dark:hover:bg-white/20'
-                    }`}
-                  >
-                    AND
-                  </button>
-                  <button
-                    onClick={() => setFilterLogic('OR')}
-                    className={`flex-1 px-3 py-2 text-xs rounded transition-colors ${
-                      filterLogic === 'OR'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-white/60 hover:bg-gray-200 dark:hover:bg-white/20'
-                    }`}
-                  >
-                    OR
-                  </button>
-                </div>
+
+                <ToggleableList
+                  items={SOURCES}
+                  selectedItems={selectedSources}
+                  onToggle={toggleSource}
+                  label="Source"
+                />
               </div>
 
               <ToggleableList
@@ -662,7 +724,7 @@ function BrowserPageContent() {
         {viewMode === 'cards' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {paginatedReforges.map((reforge) => (
-              <div key={reforge.name}>
+              <div key={reforge.name} className="h-full">
                 <ReforgeCard
                   reforge={reforge}
                   onToggleFavorite={toggleFavorite}
@@ -708,12 +770,16 @@ function BrowserPageContent() {
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
-                        {reforge.itemTypes.map(type => (
+                        {processItemTypes(reforge.itemTypes).map((item, idx) => (
                           <span
-                            key={type}
-                            className="px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded"
+                            key={idx}
+                            className={`px-2 py-0.5 text-xs rounded ${
+                              item.isSpecific
+                                ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                            }`}
                           >
-                            {type}
+                            {item.isSpecific ? `Specific: ${item.type}` : item.type}
                           </span>
                         ))}
                       </div>
@@ -732,7 +798,7 @@ function BrowserPageContent() {
                     </td>
                     <td className="p-3">
                       <div className="text-xs space-y-0.5">
-                        {reforge.stats['EPIC'] && Object.entries(reforge.stats['EPIC']).slice(0, 3).map(([stat, value]) => (
+                        {reforge.stats['EPIC'] && Object.entries(reforge.stats['EPIC']).map(([stat, value]) => (
                           <div key={stat} className="flex gap-2">
                             <span className="text-gray-600 dark:text-white/60 capitalize">{stat.replace(/_/g, ' ')}:</span>
                             <span className={`font-medium ${(value as number) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -744,14 +810,31 @@ function BrowserPageContent() {
                     </td>
                     <td className="p-3">
                       <div className="text-xs text-gray-600 dark:text-white font-semibold">
-                        {Object.keys(reforge.costs).length > 0 ? (
-                          <>
-                            {Math.min(...Object.values(reforge.costs)).toLocaleString()} -{' '}
-                            {Math.max(...Object.values(reforge.costs)).toLocaleString()} coins
-                          </>
-                        ) : (
-                          'N/A'
-                        )}
+                        {(() => {
+                          const isBlacksmith = reforge.source === 'Blacksmith'
+                          const hasCostData = Object.keys(reforge.costs).length > 0
+                          
+                          // for blacksmith reforges without cost data, use standard blacksmith prices
+                          const displayCosts = isBlacksmith && !hasCostData && reforge.rarities
+                            ? reforge.rarities.reduce((acc, rarity) => {
+                                if (BLACKSMITH_PRICES[rarity]) {
+                                  acc[rarity] = BLACKSMITH_PRICES[rarity]
+                                }
+                                return acc
+                              }, {} as Record<string, number>)
+                            : reforge.costs
+                          
+                          if (Object.keys(displayCosts).length > 0) {
+                            const costs = Object.values(displayCosts)
+                            return (
+                              <>
+                                {Math.min(...costs).toLocaleString()} -{' '}
+                                {Math.max(...costs).toLocaleString()} coins
+                              </>
+                            )
+                          }
+                          return 'N/A'
+                        })()}
                       </div>
                     </td>
                     <td className="p-3">
@@ -785,17 +868,17 @@ function BrowserPageContent() {
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="px-4 py-2 text-sm border border-gray-200 dark:border-white/10 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-[#2C2C2C] transition-colors"
+              className="px-4 py-2 text-sm text-gray-700 dark:text-white/87 border border-gray-200 dark:border-white/10 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-[#2C2C2C] transition-colors"
             >
               Previous
             </button>
-            <span className="text-sm text-gray-600 dark:text-white/60">
+            <span className="text-sm text-gray-700 dark:text-white/87">
               Page {currentPage} of {totalPages}
             </span>
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="px-4 py-2 text-sm border border-gray-200 dark:border-white/10 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-[#2C2C2C] transition-colors"
+              className="px-4 py-2 text-sm text-gray-700 dark:text-white/87 border border-gray-200 dark:border-white/10 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-[#2C2C2C] transition-colors"
             >
               Next
             </button>
