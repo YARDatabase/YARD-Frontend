@@ -28,6 +28,8 @@ interface ReforgeStats {
   mining_speed?: number
   mining_fortune?: number
   farming_fortune?: number
+  foraging_fortune?: number
+  foraging_wisdom?: number
   damage?: number
   sea_creature_chance?: number
   magic_find?: number
@@ -76,7 +78,7 @@ interface Reforge {
 }
 
 const ITEM_TYPES = ['SWORD', 'BOW', 'ARMOR', 'TOOL', 'ACCESSORY', 'FISHING_ROD', 'EQUIPMENT']
-const STAT_TYPES = ['strength', 'crit_damage', 'crit_chance', 'attack_speed', 'health', 'defense', 'intelligence', 'speed', 'mining_speed', 'mining_fortune', 'farming_fortune', 'magic_find', 'pet_luck', 'ferocity', 'ability_damage']
+const STAT_TYPES = ['strength', 'crit_damage', 'crit_chance', 'attack_speed', 'health', 'defense', 'intelligence', 'speed', 'mining_speed', 'mining_fortune', 'farming_fortune', 'foraging_fortune', 'foraging_wisdom', 'magic_find', 'pet_luck', 'ferocity', 'ability_damage']
 const RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'DIVINE', 'SPECIAL']
 const SOURCES = ['Blacksmith', 'Reforge Stone']
 
@@ -722,7 +724,7 @@ function BrowserPageContent() {
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
         {viewMode === 'cards' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {paginatedReforges.map((reforge) => (
               <div key={reforge.name} className="h-full">
                 <ReforgeCard

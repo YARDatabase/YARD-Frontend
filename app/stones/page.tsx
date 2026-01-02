@@ -28,6 +28,8 @@ interface ReforgeStats {
   mining_speed?: number
   mining_fortune?: number
   farming_fortune?: number
+  foraging_fortune?: number
+  foraging_wisdom?: number
   damage?: number
   sea_creature_chance?: number
   magic_find?: number
@@ -136,7 +138,7 @@ const ReforgeStoneCard = ({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-2">
-              <h3 className={`text-lg font-bold ${getTierColor(stone.tier)} truncate leading-tight`}>
+              <h3 className={`text-lg font-bold ${getTierColor(stone.tier)} leading-tight`}>
                 {stone.name}
               </h3>
               <span
@@ -169,25 +171,108 @@ const ReforgeStoneCard = ({
                 </div>
               )}
 
-              {stone.reforge_effect.reforge_stats && stone.reforge_effect.reforge_stats[stone.tier] && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 dark:text-white/90 mb-1.5 uppercase tracking-wide">
-                    Stats ({stone.tier})
+              {stone.reforge_effect.reforge_stats && Object.keys(stone.reforge_effect.reforge_stats).length > 0 && (() => {
+                const tierOrder = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'DIVINE', 'SPECIAL']
+                const tierAbbrev: Record<string, string> = {
+                  COMMON: 'COM',
+                  UNCOMMON: 'UNC',
+                  RARE: 'RAR',
+                  EPIC: 'EPI',
+                  LEGENDARY: 'LEG',
+                  MYTHIC: 'MYT',
+                  DIVINE: 'DIV',
+                  SPECIAL: 'SPE',
+                }
+                const statAbbrev: Record<string, string> = {
+                  sea_creature_chance: 'SCC',
+                  mining_speed: 'Mining Spd',
+                  mining_fortune: 'Mining Fort',
+                  farming_fortune: 'Farm Fort',
+                  foraging_fortune: 'Forag Fort',
+                  foraging_wisdom: 'Forag Wis',
+                  bonus_attack_speed: 'Atk Spd',
+                  attack_speed: 'Atk Spd',
+                  crit_chance: 'Crit %',
+                  crit_damage: 'Crit Dmg',
+                  true_defense: 'True Def',
+                  ability_damage: 'Abil Dmg',
+                  magic_find: 'Magic Find',
+                  pet_luck: 'Pet Luck',
+                  intelligence: 'Intel',
+                  strength: 'STR',
+                  defense: 'DEF',
+                  health: 'HP',
+                  speed: 'Speed',
+                  ferocity: 'Ferocity',
+                  damage: 'Damage',
+                }
+                const availableTiers = Object.keys(stone.reforge_effect.reforge_stats)
+                  .sort((a, b) => tierOrder.indexOf(a) - tierOrder.indexOf(b))
+                const allStats = new Set<string>()
+                Object.values(stone.reforge_effect.reforge_stats).forEach((stats) => {
+                  Object.keys(stats).forEach((stat) => allStats.add(stat))
+                })
+
+                return (
+                  <div>
+                    <div className="text-xs font-semibold text-gray-600 dark:text-white/90 mb-2 uppercase tracking-wide">
+                      Stats
+                    </div>
+                    <div>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr>
+                            <th className="text-left pr-2 pb-1.5 text-gray-500 dark:text-white/60 font-medium"></th>
+                            {availableTiers.map((tier) => (
+                              <th
+                                key={tier}
+                                className={`text-center px-1.5 pb-1.5 font-semibold ${getTierColor(tier)}`}
+                                title={tier}
+                              >
+                                {tierAbbrev[tier] || tier.slice(0, 3).toUpperCase()}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.from(allStats).map((stat) => (
+                            <tr key={stat} className="border-t border-gray-100 dark:border-white/5">
+                              <td className="text-left pr-2 py-1 text-gray-700 dark:text-white/80 capitalize">
+                                <span className="relative group/stat cursor-default">
+                                  {statAbbrev[stat] || stat.replace(/_/g, ' ')}
+                                  {statAbbrev[stat] && (
+                                    <span className="absolute left-0 bottom-full mb-1 px-2 py-1 text-xs bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg opacity-0 group-hover/stat:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-10">
+                                      {stat.replace(/_/g, ' ')}
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              {availableTiers.map((tier) => {
+                                const tierStats = stone.reforge_effect!.reforge_stats![tier]
+                                const value = tierStats?.[stat as keyof ReforgeStats]
+                                return (
+                                  <td
+                                    key={tier}
+                                    className="text-center px-1.5 py-1 text-gray-600 dark:text-white/70 font-medium tabular-nums"
+                                  >
+                                    {value !== undefined ? (
+                                      <span className={value > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
+                                        {value > 0 ? '+' : ''}{value}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300 dark:text-white/20">-</span>
+                                    )}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div className="space-y-1 text-xs">
-                    {Object.entries(stone.reforge_effect.reforge_stats[stone.tier]).map(([stat, value]) => (
-                      <div key={stat} className="flex items-center gap-2">
-                        <span className="text-gray-700 dark:text-white/95 capitalize">
-                          {stat.replace(/_/g, ' ')}:
-                        </span>
-                        <span className="text-gray-200 dark:text-white/87 font-medium">
-                          {value > 0 ? '+' : ''}{value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )
+              })()}
 
               {stone.reforge_effect.reforge_ability && (
                 <div>
@@ -356,7 +441,6 @@ export default function StonesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedTier, setSelectedTier] = useState('ALL')
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -386,18 +470,34 @@ export default function StonesPage() {
 
   const filteredStones = useMemo(() => {
     return reforgeStones.filter((stone) => {
-      const matchesSearch =
-        stone.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        stone.id.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesTier = selectedTier === 'ALL' || stone.tier === selectedTier
-      return matchesSearch && matchesTier
-    })
-  }, [reforgeStones, searchQuery, selectedTier])
+      // filter out power stones
+      const isReforgeStone = stone.reforge_effect?.reforge_stats && 
+        Object.keys(stone.reforge_effect.reforge_stats).length > 0
+      if (!isReforgeStone) return false
 
-  const uniqueTiers = useMemo(() => {
-    const tiers = Array.from(new Set(reforgeStones.map((stone) => stone.tier)))
-    return tiers.sort()
-  }, [reforgeStones])
+      const query = searchQuery.toLowerCase().trim()
+      if (!query) return true
+
+      // search across multiple fields
+      const searchableFields = [
+        stone.name,
+        stone.id,
+        stone.tier,
+        stone.reforge_effect?.reforge_name || '',
+        stone.reforge_effect?.item_types || '',
+        // include stat names in search
+        ...(stone.reforge_effect?.reforge_stats 
+          ? Object.values(stone.reforge_effect.reforge_stats).flatMap(stats => 
+              Object.keys(stats).map(stat => stat.replace(/_/g, ' '))
+            )
+          : []),
+      ]
+
+      return searchableFields.some(field => 
+        field.toLowerCase().includes(query)
+      )
+    })
+  }, [reforgeStones, searchQuery])
 
   const getTierColor = (tier: string) => {
     const colors: Record<string, string> = {
@@ -443,10 +543,6 @@ export default function StonesPage() {
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value)
-  }
-
-  const handleTierChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedTier(e.target.value)
   }
 
   if (!mounted) {
@@ -542,36 +638,54 @@ export default function StonesPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="flex-1">
+              <div className="flex-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg
+                    className="h-4 w-4 text-gray-400 dark:text-white/40"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
                 <input
                   type="text"
-                  placeholder="Search reforge stones..."
+                  placeholder="Search by name, reforge, stat, item type..."
                   value={searchQuery}
                   onChange={handleSearchChange}
-                  className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-white/10 rounded-md leading-5 bg-white dark:bg-[#1E1E1E] text-gray-200 dark:text-white/87 placeholder-gray-400 dark:placeholder-white/38 focus:outline-none focus:placeholder-gray-500 dark:focus:placeholder-white/60 focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-200 focus:border-blue-500 dark:focus:border-blue-200/50 text-sm transition-colors"
+                  className="block w-full pl-10 pr-10 py-2.5 border border-gray-200 dark:border-white/10 rounded-md leading-5 bg-white dark:bg-[#1E1E1E] text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-white/38 focus:outline-none focus:placeholder-gray-500 dark:focus:placeholder-white/60 focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-200 focus:border-blue-500 dark:focus:border-blue-200/50 text-sm transition-colors"
+                  aria-label="Search reforge stones"
                 />
-              </div>
-              <div className="sm:w-48">
-                <select
-                  value={selectedTier}
-                  onChange={handleTierChange}
-                  className="block w-full px-3 py-2.5 border border-gray-200 dark:border-white/10 rounded-md bg-white dark:bg-[#1E1E1E] text-gray-200 dark:text-white/87 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:ring-blue-200 focus:border-blue-500 dark:focus:border-blue-200/50 transition-colors"
-                >
-                  <option value="ALL">All Tiers</option>
-                  {uniqueTiers.map((tier) => (
-                    <option key={tier} value={tier}>
-                      {tier}
-                    </option>
-                  ))}
-                </select>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 dark:text-white/40 hover:text-gray-600 dark:hover:text-white/60 transition-colors"
+                    aria-label="Clear search"
+                    tabIndex={0}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="flex items-center justify-between mt-3 text-sm text-gray-600 dark:text-slate-400">
               <span>
                 {filteredStones.length} {filteredStones.length === 1 ? 'result' : 'results'}
-                {reforgeStones.length !== filteredStones.length &&
-                  ` of ${reforgeStones.length}`}
+                {searchQuery && (() => {
+                  const totalReforgeStones = reforgeStones.filter(
+                    (s) => s.reforge_effect?.reforge_stats && Object.keys(s.reforge_effect.reforge_stats).length > 0
+                  ).length
+                  return totalReforgeStones !== filteredStones.length ? ` of ${totalReforgeStones}` : ''
+                })()}
               </span>
             </div>
           </div>
@@ -598,8 +712,8 @@ export default function StonesPage() {
         ) : filteredStones.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-sm text-gray-700 dark:text-white/95">
-              {searchQuery || selectedTier !== 'ALL'
-                ? 'Try adjusting your search or filter'
+              {searchQuery
+                ? 'No results found. Try a different search term.'
                 : 'No reforge stones available'}
             </p>
           </div>

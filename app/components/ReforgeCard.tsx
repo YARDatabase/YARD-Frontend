@@ -16,6 +16,8 @@ interface ReforgeStats {
   mining_speed?: number
   mining_fortune?: number
   farming_fortune?: number
+  foraging_fortune?: number
+  foraging_wisdom?: number
   damage?: number
   sea_creature_chance?: number
   magic_find?: number
@@ -94,6 +96,42 @@ function processItemTypes(itemTypes: string[]): Array<{ type: string; isSpecific
   return result
 }
 
+// tier ordering and abbreviations for stats table
+const TIER_ORDER = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC', 'DIVINE', 'SPECIAL']
+const TIER_ABBREV: Record<string, string> = {
+  COMMON: 'COM',
+  UNCOMMON: 'UNC',
+  RARE: 'RAR',
+  EPIC: 'EPI',
+  LEGENDARY: 'LEG',
+  MYTHIC: 'MYT',
+  DIVINE: 'DIV',
+  SPECIAL: 'SPE',
+}
+const STAT_ABBREV: Record<string, string> = {
+  sea_creature_chance: 'SCC',
+  mining_speed: 'Mining Spd',
+  mining_fortune: 'Mining Fort',
+  farming_fortune: 'Farm Fort',
+  foraging_fortune: 'Forag Fort',
+  foraging_wisdom: 'Forag Wis',
+  bonus_attack_speed: 'Atk Spd',
+  attack_speed: 'Atk Spd',
+  crit_chance: 'Crit %',
+  crit_damage: 'Crit Dmg',
+  true_defense: 'True Def',
+  ability_damage: 'Abil Dmg',
+  magic_find: 'Magic Find',
+  pet_luck: 'Pet Luck',
+  intelligence: 'Intel',
+  strength: 'STR',
+  defense: 'DEF',
+  health: 'HP',
+  speed: 'Speed',
+  ferocity: 'Ferocity',
+  damage: 'Damage',
+}
+
 // displays a card component for a reforge showing stats costs and actions
 export default function ReforgeCard({
   reforge,
@@ -101,11 +139,16 @@ export default function ReforgeCard({
   isFavorite,
   getTierColor
 }: ReforgeCardProps) {
-  const epicStats = reforge.stats['EPIC'] || {}
-  const statEntries = Object.entries(epicStats)
-  
   // process item types to group SPECIFIC items properly
   const processedTypes = processItemTypes(reforge.itemTypes)
+  
+  // get available tiers and all stats for the table
+  const availableTiers = Object.keys(reforge.stats)
+    .sort((a, b) => TIER_ORDER.indexOf(a) - TIER_ORDER.indexOf(b))
+  const allStats = new Set<string>()
+  Object.values(reforge.stats).forEach((stats) => {
+    Object.keys(stats).forEach((stat) => allStats.add(stat))
+  })
 
   return (
     <div className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-white/10 rounded-lg p-4 hover:shadow-md dark:hover:shadow-lg transition-shadow h-full flex flex-col">
@@ -161,27 +204,65 @@ export default function ReforgeCard({
         </div>
       </div>
 
-      <div className="mb-3 pb-3 border-b border-gray-200 dark:border-white/10">
-        <div className="text-xs font-semibold text-gray-600 dark:text-white/60 mb-1.5">
-          Stats (Epic)
+      {availableTiers.length > 0 && allStats.size > 0 && (
+        <div className="mb-3 pb-3 border-b border-gray-200 dark:border-white/10">
+          <div className="text-xs font-semibold text-gray-600 dark:text-white/60 mb-2 uppercase tracking-wide">
+            Stats
+          </div>
+          <div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left pr-2 pb-1.5 text-gray-500 dark:text-white/60 font-medium"></th>
+                  {availableTiers.map((tier) => (
+                    <th
+                      key={tier}
+                      className={`text-center px-1.5 pb-1.5 font-semibold ${getTierColor(tier)}`}
+                      title={tier}
+                    >
+                      {TIER_ABBREV[tier] || tier.slice(0, 3).toUpperCase()}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(allStats).map((stat) => (
+                  <tr key={stat} className="border-t border-gray-100 dark:border-white/5">
+                    <td className="text-left pr-2 py-1 text-gray-700 dark:text-white/80 capitalize">
+                      <span className="relative group/stat cursor-default">
+                        {STAT_ABBREV[stat] || stat.replace(/_/g, ' ')}
+                        {STAT_ABBREV[stat] && (
+                          <span className="absolute left-0 bottom-full mb-1 px-2 py-1 text-xs bg-gray-900 dark:bg-gray-700 text-white rounded shadow-lg opacity-0 group-hover/stat:opacity-100 transition-opacity duration-150 whitespace-nowrap pointer-events-none z-10">
+                            {stat.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                    {availableTiers.map((tier) => {
+                      const tierStats = reforge.stats[tier]
+                      const value = tierStats?.[stat as keyof ReforgeStats]
+                      return (
+                        <td
+                          key={tier}
+                          className="text-center px-1.5 py-1 text-gray-600 dark:text-white/70 font-medium tabular-nums"
+                        >
+                          {value !== undefined ? (
+                            <span className={(value as number) > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}>
+                              {(value as number) > 0 ? '+' : ''}{value}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300 dark:text-white/20">-</span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="space-y-1">
-          {statEntries.map(([stat, value]) => (
-            <div key={stat} className="flex items-center justify-between text-xs">
-              <span className="text-gray-600 dark:text-white/70 capitalize">
-                {stat.replace(/_/g, ' ')}:
-              </span>
-              <span className={`font-medium ${
-                (value as number) >= 0 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : 'text-red-600 dark:text-red-400'
-              }`}>
-                {(value as number) > 0 ? '+' : ''}{value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       <div className="mb-3 flex-1">
         <CostBreakdown reforge={reforge} />
