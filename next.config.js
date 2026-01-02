@@ -5,27 +5,11 @@ const nextConfig = {
   
   async headers() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
-    const connectSrc = apiUrl ? `'self' ${apiUrl}` : "'self'"
-    const imgSrc = apiUrl ? `'self' data: ${apiUrl}` : "'self' data:"
     
     return [
       {
         source: '/:path*',
         headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'unsafe-inline'",
-              `img-src ${imgSrc}`,
-              "font-src 'self'",
-              `connect-src ${connectSrc}`,
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'"
-            ].join('; ')
-          },
           {
             key: 'X-Frame-Options',
             value: 'DENY'
