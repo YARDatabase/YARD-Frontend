@@ -245,6 +245,16 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-4">
               <a
+                href="https://ko-fi.com/X8X41P51K5"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-200 dark:hover:text-white/90 transition-colors"
+                aria-label="Support this project on Ko-fi"
+              >
+                Support this Project
+              </a>
+              <span className="hidden sm:inline">•</span>
+              <a
                 href="https://github.com/YARDatabase"
                 target="_blank"
                 rel="noopener noreferrer"
